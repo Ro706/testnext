@@ -116,6 +116,19 @@ export async function connectDB() {
   await mongoose.connect(MONGODB_URI);
 }
 ```
+### 📄 lib/jwt.ts — token
+
+```ts
+import jwt from "jsonwebtoken";
+
+const SECRET = process.env.JWT_SECRET!;
+
+export function signToken(payload: object) {
+  return jwt.sign(payload, SECRET, {
+    expiresIn: "1d",
+  });
+}
+```
 
 ---
 
@@ -283,22 +296,6 @@ export async function POST(req: Request) {
 
 ```
 
-### 🔑 jwt 
-
-📄 `app/(auth)/sign-in/page.tsx`
-
-```ts
-import jwt from "jsonwebtoken";
-
-const SECRET = process.env.JWT_SECRET!;
-
-export function signToken(payload: object) {
-  return jwt.sign(payload, SECRET, {
-    expiresIn: "1d",
-  });
-}
-
-```
 ---
 
 ## 🎨 Frontend Pages
