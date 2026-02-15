@@ -76,6 +76,8 @@ cd my-auth-app
 
 ```bash
 npm install mongoose bcryptjs zod
+npm install jsonwebtoken
+npm install -D @types/jsonwebtoken
 ```
 
 ---
@@ -95,6 +97,7 @@ Create `.env.local`:
 
 ```
 MONGODB_URI=mongodb://127.0.0.1:27017/nextjs-auth
+JWT_SECRET="token"
 ```
 
 ---
@@ -190,7 +193,7 @@ export async function POST(req: Request) {
 
 ---
 
-### 🔑 Signin API (with cookie)
+### 🔑 Signin API (with cookie+jwt)
 
 📄 `app/api/auth/signin/route.ts`
 
@@ -200,58 +203,102 @@ import bcrypt from "bcryptjs";
 import { connectDB } from "@/lib/db";
 import { User } from "@/model/User";
 import { signinSchema } from "@/schemas/auth";
+import { signToken } from "@/lib/jwt"; // ⭐ NEW
 
 export async function POST(req: Request) {
-  await connectDB();
+  try {
+    await connectDB();
 
-  const body = await req.json();
-  const parsed = signinSchema.safeParse(body);
+    const body = await req.json();
 
-  if (!parsed.success) {
-    return NextResponse.json({ error: "Invalid input" }, { status: 400 });
+    const parsed = signinSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return NextResponse.json(
+        { error: "Invalid email or password format" },
+        { status: 400 }
+      );
+    }
+
+    const { email, password } = parsed.data;
+
+    const user = await User.findOne({ email }).select("+password");
+
+    if (!user) {
+      return NextResponse.json(
+        { error: "Invalid credentials" },
+        { status: 401 }
+      );
+    }
+
+    const passwordMatch = await bcrypt.compare(
+      password,
+      user.password
+    );
+
+    if (!passwordMatch) {
+      return NextResponse.json(
+        { error: "Invalid credentials" },
+        { status: 401 }
+      );
+    }
+
+    // 🔐 ⭐ CREATE JWT TOKEN
+    const token = signToken({
+      userId: user._id,
+      email: user.email,
+    });
+
+    // ✅ Create response
+    const response = NextResponse.json(
+      {
+        message: "Login successful",
+        user: {
+          id: user._id,
+          email: user.email,
+        },
+      },
+      { status: 200 }
+    );
+
+    // 🍪 ⭐ STORE JWT IN COOKIE (NOT userId)
+    response.cookies.set("auth", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: 60 * 60 * 24,
+    });
+
+    return response;
+  } catch (error) {
+    console.error("Signin error:", error);
+
+    return NextResponse.json(
+      { error: "Something went wrong. Please try again." },
+      { status: 500 }
+    );
   }
-
-  const { email, password } = parsed.data;
-
-  const user = await User.findOne({ email });
-
-  if (!user || !(await bcrypt.compare(password, user.password))) {
-    return NextResponse.json({ error: "Invalid credentials" }, { status: 401 });
-  }
-
-  const response = NextResponse.json({ message: "Login successful" });
-
-  response.cookies.set("auth", user._id.toString(), {
-    httpOnly: true,
-    path: "/",
-    maxAge: 60 * 60 * 24,
-  });
-
-  return response;
 }
+
 ```
 
----
+### 🔑 jwt 
 
-### 🚪 Logout API
-
-📄 `app/api/auth/logout/route.ts`
+📄 `app/(auth)/sign-in/page.tsx`
 
 ```ts
-import { NextResponse } from "next/server";
+import jwt from "jsonwebtoken";
 
-export async function POST() {
-  const response = NextResponse.json({ message: "Logged out" });
+const SECRET = process.env.JWT_SECRET!;
 
-  response.cookies.set("auth", "", {
-    expires: new Date(0),
-    path: "/",
+export function signToken(payload: object) {
+  return jwt.sign(payload, SECRET, {
+    expiresIn: "1d",
   });
-
-  return response;
 }
-```
 
+```
 ---
 
 ## 🎨 Frontend Pages

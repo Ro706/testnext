@@ -3,16 +3,14 @@ import bcrypt from "bcryptjs";
 import { connectDB } from "@/lib/db";
 import { User } from "@/model/User";
 import { signinSchema } from "@/schemas/auth";
+import { signToken } from "@/lib/jwt"; // ⭐ NEW
 
 export async function POST(req: Request) {
   try {
-    // 🔌 Connect database
     await connectDB();
 
-    // 📥 Parse request body
     const body = await req.json();
 
-    // ✅ Validate input using Zod
     const parsed = signinSchema.safeParse(body);
 
     if (!parsed.success) {
@@ -24,10 +22,8 @@ export async function POST(req: Request) {
 
     const { email, password } = parsed.data;
 
-    // 🔎 Find user by email
     const user = await User.findOne({ email }).select("+password");
 
-    // ❌ Do not reveal whether email exists (security best practice)
     if (!user) {
       return NextResponse.json(
         { error: "Invalid credentials" },
@@ -35,7 +31,6 @@ export async function POST(req: Request) {
       );
     }
 
-    // 🔐 Compare password
     const passwordMatch = await bcrypt.compare(
       password,
       user.password
@@ -47,6 +42,12 @@ export async function POST(req: Request) {
         { status: 401 }
       );
     }
+
+    // 🔐 ⭐ CREATE JWT TOKEN
+    const token = signToken({
+      userId: user._id,
+      email: user.email,
+    });
 
     // ✅ Create response
     const response = NextResponse.json(
@@ -60,13 +61,13 @@ export async function POST(req: Request) {
       { status: 200 }
     );
 
-    // 🍪 Set secure HTTP-only cookie
-    response.cookies.set("auth", user._id.toString(), {
+    // 🍪 ⭐ STORE JWT IN COOKIE (NOT userId)
+    response.cookies.set("auth", token, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
       path: "/",
-      maxAge: 60 * 60 * 24, // 1 day
+      maxAge: 60 * 60 * 24,
     });
 
     return response;
