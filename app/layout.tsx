@@ -19,6 +19,9 @@ export const metadata: Metadata = {
     default: "Next Auth App",
     template: "%s | Next Auth App",
   },
+  icons: {
+    icon: "/favicon.ico",
+  },
   description: "Modern authentication app built with Next.js",
 };
 

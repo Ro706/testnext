@@ -34,8 +34,9 @@ export default async function DashboardPage() {
 
         {/* 🔹 Header */}
         <div className="flex items-center justify-between">
+          <img src="/favicon.ico" alt="Favicon" className="w-16 h-16" />
           <h1 className="text-3xl font-bold">
-            Hello {username} 👋
+            Hello {username}
           </h1>
 
           <LogoutButton />
