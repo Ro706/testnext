@@ -3,15 +3,19 @@ import bcrypt from "bcryptjs";
 import { connectDB } from "@/lib/db";
 import { User } from "@/model/User";
 import { signupSchema } from "@/schemas/auth";
+import { signToken } from "@/lib/jwt";
 
 export async function POST(req: Request) {
   try {
+    // 🔌 Connect to database
     await connectDB();
 
+    // 📥 Parse request body
     const body = await req.json();
 
-    // ✅ Validate input
+    // ✅ Validate input using Zod
     const parsed = signupSchema.safeParse(body);
+
     if (!parsed.success) {
       return NextResponse.json(
         { error: "Invalid input data" },
@@ -21,8 +25,9 @@ export async function POST(req: Request) {
 
     const { email, password } = parsed.data;
 
-    // ✅ Check if user exists
+    // 🔎 Check if user already exists
     const existingUser = await User.findOne({ email });
+
     if (existingUser) {
       return NextResponse.json(
         { error: "User already exists" },
@@ -30,22 +35,43 @@ export async function POST(req: Request) {
       );
     }
 
-    // ✅ Hash password
+    // 🔐 Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // ✅ Create user
+    // 🧾 Create new user
     const user = await User.create({
       email,
       password: hashedPassword,
     });
 
-    return NextResponse.json(
+    // 🔑 Generate JWT token
+    const token = signToken({
+      userId: user._id,
+      email: user.email,
+    });
+
+    // ✅ Create response
+    const response = NextResponse.json(
       {
         message: "User created successfully",
-        userId: user._id,
+        user: {
+          id: user._id,
+          email: user.email,
+        },
       },
       { status: 201 }
     );
+
+    // 🍪 Set JWT cookie (HTTP-only)
+    response.cookies.set("auth", token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      path: "/",
+      maxAge: 60 * 60 * 24 * 7, // 7 days
+    });
+
+    return response;
   } catch (error) {
     console.error("Signup error:", error);
 

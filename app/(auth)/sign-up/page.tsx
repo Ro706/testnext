@@ -21,7 +21,7 @@ export default function SignUp() {
 
     if (res.ok) {
       alert("Signup successful");
-      router.push("/sign-in");
+      router.push("/dashboard");
     } else {
       alert(data.error);
     }
